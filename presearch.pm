@@ -49,27 +49,24 @@ sub OnChanMsg {
     }
 
     # Match the first command like "!command"
-    my $match = $message ~~ m/^(!\w+)/;
-    # Put the command in the variable
-    my $cmd = lc($1);
+    my ($cmd, $arguments) = parseCommandLine($message);
+
 
     #$self->PutModule("nick: " . $nick . " chan: " . $chan . " message: " . $message);
     # Command?
-    if ($match) {
+    if ($cmd) {
         # Yes, so compare different types of commands and return it to the sender
         # !pre release
-        if ($cmd eq "!pre") {
-            $match = $message ~~ m/^!\w+\s(\w.*)/;
-
+        if ($cmd eq "!pre" && $arguments) {
             # Search for pre
-            $self->searchPre($chan, $1);
+            $self->searchPre($chan, $arguments);
 
         # !dupe bla bla bla
-        } elsif ($cmd eq "!dupe") {
+        } elsif ($cmd eq "!dupe" && $arguments) {
             $match = $message ~~ m/^!\w+\s(.*)/;
 
             # Search for dupes
-            $self->searchDupe($chan, $1);
+            $self->searchDupe($chan, $arguments);
 
         # !grp group (section)
         } elsif ($cmd ~~ m/!grp|!group/i) {
@@ -103,14 +100,12 @@ sub OnChanMsg {
 
         # !top (section)
         } elsif ($cmd eq "!top") {
-            $match = $message ~~ m/^!\w+\s(.*)/;
-
             # Get All-Time top groups
-            if (!$match) {
+            if (!$arguments) {
                 $self->topGroups($chan);
             # Get top groups by section
             } else {
-                $self->topSectionGroups($chan, $1);
+                $self->topSectionGroups($chan, $arguments);
             }
 
         # !day, !today, !week, !month, !year
@@ -120,14 +115,12 @@ sub OnChanMsg {
 
         # !stats (group)
         } elsif ($cmd eq "!stats") {
-            $match = $message ~~ m/^!\w+\s(.*)/;
-
             # Get extended DB stats
-            if (!$match) {
+            if (!$arguments) {
                 $self->extendedStats($chan);
             # Get group stats
             } else {
-                $self->groupStats($chan, $1);
+                $self->groupStats($chan, $arguments);
             }
 
         # !db
@@ -145,9 +138,25 @@ sub OnChanMsg {
     return $ZNC::CONTINUE;
 }
 
+# Parse command line
+# returns if it's a valid command line
+# an array with $cmd and $arguments
+sub parseCommandLine{
+  my ( $command ) = @_;
+  if( $command =~ m/^((!\w+)((\s+\w+)+)?)/g ){
+    my $cmd = $2;
+    my $arguments = $3;
+    if( $arguments ){
+      $arguments =~ s/^\s+//;
+    }
+    return @array = ($cmd, $arguments);
+  }
+
+}
+
 ##
 # !pre
-# !dupe 
+# !dupe
 ##
 
 # Search pre
@@ -526,7 +535,7 @@ sub newest {
 
 ##
 # !top
-# !top section 
+# !top section
 ##
 
 # Shows the alltime top10 groups
@@ -555,9 +564,9 @@ sub topGroups {
             my ($group_count, $group) = $query->fetchrow();
             # 1. GROUP - 12345 rls
             $self->sendMessage($nick, GREY.($i+1).".".ORANGE." ".$group.NORMAL." - ".$group_count.NORMAL." rls");
-            $i++; 
+            $i++;
         }
-    } else {    
+    } else {
         $self->sendMessage($nick, BOLD."Sorry!".NORMAL." No ranking found, PreDB must be empty.");
     }
 
@@ -608,7 +617,7 @@ sub topSectionGroups {
             my ($group_count, $group) = $query->fetchrow();
             # 1. GROUP - 12345 rls
             $self->sendMessage($nick, GREY.($i+1).".".ORANGE." ".$group.NORMAL." - ".$group_count.NORMAL." rls");
-            $i++; 
+            $i++;
         }
     } else {
         $self->sendMessage($nick, BOLD."Sorry!".NORMAL." Found no ranking for '".BOLD.UNDERLINE.$param.NORMAL."'");
@@ -1050,7 +1059,7 @@ sub groupStats {
     my $dbh = DBI->connect("DBI:mysql:database=$DB_NAME;host=$DB_HOST", $DB_USER, $DB_PASSWD)
         or die "Couldn't connect to database: " . DBI->errstr;
 
-    # ALL RELEASES (FILES - SIZE) 
+    # ALL RELEASES (FILES - SIZE)
     my $query = $dbh->prepare("SELECT `".$COL_GROUP."`, COUNT(*), SUM(`".$COL_FILES."`), SUM(`".$COL_SIZE."`) FROM `".$DB_TABLE."` WHERE LOWER(`".$COL_GROUP."`) LIKE LOWER( ? );");
     $query->execute($param) or die $dbh->errstr;
 
@@ -1349,7 +1358,7 @@ sub getType {
     # NUKE / DELPRE
     } elsif ($type eq 3) {
         $color .= RED."DEL";
-    } 
+    }
 
     return $color.NORMAL;
 }
@@ -1392,7 +1401,7 @@ sub getSection  {
     # TV Shows/Series: TV TV-BLURAY TV-DVDR TV-DVDRiP TV-HR TV-x264 TV-XViD
     } elsif ($section ~~ m/tv-?|doku/i) {
         $color = ORANGE;
- 
+
     # Movies: DVDR / XVID / X264 / SVCD / VCD / BLURAY
     } elsif ($section ~~ m/dvdr|xvid|x264|vcd|divx|bluray/i) {
         $color = RED;
@@ -1531,5 +1540,7 @@ sub sendMessage {
     # send private message
     $self->PutIRC("PRIVMSG ".$nick." : ".$message);
 }
+
+
 
 1;
