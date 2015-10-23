@@ -143,7 +143,7 @@ sub OnChanMsg {
 # an array with $cmd and $arguments
 sub parseCommandLine{
   my ( $command ) = @_;
-  if( $command =~ m/^((!\w+)((\s+[^ ]+)+)?)/g ){
+  if( $command =~ m/^((!\w+)((\s+[\S]+)+)?)/g ){
     my $cmd = $2;
     my $arguments = $3;
     if( $arguments ){
