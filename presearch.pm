@@ -42,7 +42,7 @@ sub OnChanMsg {
     }
 
     # Match the first command like "!command"
-    my ($cmd, $arguments) = parseCommandLine($message);
+    my ($cmd, @arguments) = parseCommandLine($message);
 
 
     #$self->PutModule("nick: " . $nick . " chan: " . $chan . " message: " . $message);
@@ -50,51 +50,36 @@ sub OnChanMsg {
     if ($cmd) {
         # Yes, so compare different types of commands and return it to the sender
         # !pre release
-        if ($cmd eq "!pre" && $arguments) {
+        if ($cmd eq "!pre" && @arguments) {
             # Search for pre
             $self->searchPre($chan, $arguments);
 
         # !dupe bla bla bla
-        } elsif ($cmd eq "!dupe" && $arguments) {
-            $match = $message ~~ m/^!\w+\s(.*)/;
-
+      } elsif ($cmd eq "!dupe" && @arguments) {
             # Search for dupes
             $self->searchDupe($chan, $arguments);
 
         # !grp group (section)
         } elsif ($cmd ~~ m/!grp|!group/i) {
-            $match = $message ~~ m/^!\w+\s(.*)\s(.*)$/;
-
             # Search for group releases
-            if ($match) {
-                $self->group($chan, $1, $2);
-            } else {
-                $match = $message ~~ m/^!\w+\s(.*)/;
-                $self->group($chan, $1);
-            }
+            $self->group($chan, $arguments[0], $arguments[1]);
+
 
         # !new section
-        } elsif ($cmd eq "!new") {
-            $match = $message ~~ m/^!\w+\s(.*)/;
-
+      } elsif ($cmd eq "!new") {
             # Search foo dupes
-            $self->newest($chan, $1);
+            $self->newest($chan, $arguments);
 
         # !nukes (group/section -g/-s)
         } elsif ($cmd eq "!nukes") {
-            $match = $message ~~ m/^!\w+\s(.*)\s(.*)$/;
-
             # Get nukes
-            if ($match) {
-                $self->nukes($chan, $1, $2);
-            } else {
-                $self->nukes($chan);
-            }
+            $self->nukes($chan, $1, $2);
+
 
         # !top (section)
         } elsif ($cmd eq "!top") {
             # Get All-Time top groups
-            if (!$arguments) {
+            if (!@arguments) {
                 $self->topGroups($chan);
             # Get top groups by section
             } else {
@@ -109,7 +94,7 @@ sub OnChanMsg {
         # !stats (group)
         } elsif ($cmd eq "!stats") {
             # Get extended DB stats
-            if (!$arguments) {
+            if (!@arguments) {
                 $self->extendedStats($chan);
             # Get group stats
             } else {
@@ -134,17 +119,12 @@ sub OnChanMsg {
 # Parse command line
 # returns if it's a valid command line
 # an array with $cmd and $arguments
-sub parseCommandLine{
-  my ( $command ) = @_;
-  if( $command =~ m/^((!\w+)((\s+[\S]+)+)?)/g ){
-    my $cmd = $2;
-    my $arguments = $3;
-    if( $arguments ){
-      $arguments =~ s/^\s+//;
-    }
-    return @array = ($cmd, $arguments);
-  }
-
+sub parseCommandLine {
+  my $message = shift;
+  my @splitted_message = split / /, $message;
+  my $cmd = $splitted_message[0];
+  my @arguments = splice(@splitted_message, 1);
+  return @array = ($cmd, @arguments);
 }
 
 ##
