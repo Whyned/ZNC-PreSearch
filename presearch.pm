@@ -42,38 +42,40 @@ sub OnChanMsg {
     }
 
     # Match the first command like "!command"
-    my ($cmd, @arguments) = parseCommandLine($message);
+    my($cmd, @arguments) = parseCommandLine($message);
+    my $jarguments = join(" ", @arguments);
 
-
+            print "####### CMD:", $cmd. "ARGUMENTS: ".$jarguments." MSG: ".$message;
     #$self->PutModule("nick: " . $nick . " chan: " . $chan . " message: " . $message);
     # Command?
     if ($cmd) {
-        # Yes, so compare different types of commands and return it to the sender
-        # !pre release
-        if ($cmd eq "!pre" && @arguments) {
-            # Search for pre
-            $self->searchPre($chan, $arguments);
+      # Yes, so compare different types of commands and return it to the sender
+      # !pre release
+      if ($cmd eq "!pre" && @arguments) {
+          # Search for pre
+          $self->searchPre($nick, $arguments[0]);
 
         # !dupe bla bla bla
       } elsif ($cmd eq "!dupe" && @arguments) {
             # Search for dupes
-            $self->searchDupe($chan, $arguments);
 
-        # !grp group (section)
-        } elsif ($cmd ~~ m/!grp|!group/i) {
-            # Search for group releases
-            $self->group($chan, $arguments[0], $arguments[1]);
+            $self->searchDupe($nick, $jarguments);
+
+      # !grp group (section)
+      } elsif ($cmd ~~ m/!grp|!group/i) {
+          # Search for group releases
+          $self->group($chan, $arguments[0], $arguments[1]);
 
 
         # !new section
       } elsif ($cmd eq "!new") {
             # Search foo dupes
-            $self->newest($chan, $arguments);
+            $self->newest($chan, $jarguments);
 
         # !nukes (group/section -g/-s)
         } elsif ($cmd eq "!nukes") {
             # Get nukes
-            $self->nukes($chan, $1, $2);
+            $self->nukes($chan, $arguments[0], $arguments[1]);
 
 
         # !top (section)
@@ -117,8 +119,7 @@ sub OnChanMsg {
 }
 
 # Parse command line
-# returns if it's a valid command line
-# an array with $cmd and $arguments
+# Return: ([command, arguments])
 sub parseCommandLine {
   my $message = shift;
   my @splitted_message = split / /, $message;
@@ -140,11 +141,10 @@ sub searchPre {
     my $result;
 
     # Connect to Database
-    my $dbh = DBI->connect("DBI:mysql:database=$DB_NAME;host=$DB_HOST", $DB_USER, $DB_PASSWD)
-        or die "Couldn't connect to database: " . DBI->errstr;
+    my $dbh = $self->getDBI();
 
     # Prepare Query -> Get Release
-    my $query = $dbh->prepare("SELECT `".$COL_ID."`,`".$COL_PRETIME."`,`".$COL_RELEASE."`,`".$COL_SECTION."`,`".$COL_FILES."`,`".$COL_SIZE."`,`".$COL_STATUS."`,`".$COL_REASON."`,`".$COL_GROUP."` FROM  `".$DB_TABLE."` WHERE `".$COL_RELEASE."` LIKE ? LIMIT 1;");
+    my $query = $dbh->prepare("SELECT ".joinCollumns(($COL_ID, $COL_PRETIME, $COL_RELEASE, $COL_SECTION, $COL_FILES, $COL_SIZE, $COL_STATUS, $COL_REASON, $COL_GROUP, $COL_NETWORK, $COL_MP3INFO, $COL_VIDEOINFO, $COL_URL))." FROM  `".$DB_TABLE."` WHERE `".$COL_RELEASE."` LIKE ? LIMIT 1;");
     # Execute Query
     $query->execute($release) or die $dbh->errstr;
 
@@ -153,29 +153,58 @@ sub searchPre {
     # Do we have a result?
     if ($rows > 0) {
         # set variables
-        my ($id, $pretime, $pre, $section, $files, $size, $status, $reason, $group) = $query->fetchrow();
+        my ($id, $pretime, $pre, $section, $files, $size, $status, $reason, $group, $network, $mp3info, $videoinfo, $url) = $query->fetchrow();
 
 
         $pretime = $self->get_time_since($pretime);
         $section = $self->getSection($section);
         $size = $self->getSize($size);
 
+
         # SECTION + RELEASE
-        $result .= $section." ".$pre." ".$pretime;
+        my $preline = $section." ".$pre." ".$pretime;
 
         # FILES + SIZE?
         if ($files > 0 or $size > 0) {
-            $result .= GREY." - [".NORMAL.$files.ORANGE."F".NORMAL." - ".$size.GREY."] ".NORMAL;
+            $preline .= GREY." - [".NORMAL.$files.ORANGE."F".NORMAL." - ".$size.GREY."] ".NORMAL;
         }
 
         # NUKED or DEL?
         if ($status eq 1 or $status eq 3) {
             $status = $self->getType($status);
-            $result .= " - ".$status.RED.": ".$reason;
+            $preline .= " - ".$status.RED.": ".$reason." [".$network."]";
         }
 
+        $self->sendRawMessage($nick, $preline);
+
+        if($mp3info){
+          $self->sendRawMessage($nick, "[".GREY."MP3INFO".NORMAL."] [".ORANGE.$mp3info.NORMAL."]");
+        }
+        if($videoinfo){
+          $self->sendRawMessage($nick, "[MP3INFO] [".$mp3info."]");
+        }
+
+        if($url || $genre){
+          my $genreline;
+          if($genre){
+            $genreline .= "[".$genre."]";
+          }else{
+            $genreline .= "[UNKNOWN_GENRE]";
+          }
+          if($url){
+            $genreline .= " URL: ".$url;
+          }
+          $self->sendRawMessage($nick, $genreline);
+        }
+
+
+
+
+
+
+
     } else  {
-        $result .= BOLD."Sorry!".NORMAL." Found nothing about '".BOLD.UNDERLINE.$release.NORMAL."'";
+        $self->sendMessage($nick, BOLD."Sorry!".NORMAL." Found nothing about '".BOLD.UNDERLINE.$release.NORMAL."'");
     }
 
     # Finish query
@@ -184,8 +213,6 @@ sub searchPre {
     # Disconnect Database
     $dbh->disconnect();
 
-    # return result
-    $self->sendMessage($nick, $result);
 }
 
 # Search dupe
@@ -202,11 +229,10 @@ sub searchDupe {
     }
 
     # Connect to Database
-    my $dbh = DBI->connect("DBI:mysql:database=$DB_NAME;host=$DB_HOST", $DB_USER, $DB_PASSWD)
-        or die "Couldn't connect to database: " . DBI->errstr;
+    my $dbh = $self->getDBI();
 
-    # Prepare Query -> Get Releases
-    my $query = $dbh->prepare("SELECT `".$COL_ID."`,`".$COL_PRETIME."`,`".$COL_RELEASE."`,`".$COL_SECTION."`,`".$COL_FILES."`,`".$COL_SIZE."`,`".$COL_STATUS."`,`".$COL_REASON."`,`".$COL_GROUP."` FROM  `".$DB_TABLE."` WHERE LOWER(`".$COL_RELEASE."`) LIKE LOWER( ? ) ORDER BY `".$COL_PRETIME."` DESC LIMIT 10;");
+    # Prepare Query -> Get Release
+    my $query = $dbh->prepare("SELECT ".joinCollumns(($COL_ID, $COL_PRETIME, $COL_RELEASE, $COL_SECTION, $COL_FILES, $COL_SIZE, $COL_STATUS, $COL_REASON, $COL_GROUP))." FROM  `".$DB_TABLE."` WHERE LOWER(`".$COL_RELEASE."`) LIKE LOWER( ? ) ORDER BY `".$COL_PRETIME."` DESC LIMIT 10;");
 
     # Execute Query
     $query->execute($release) or die $dbh->errstr;
@@ -827,7 +853,7 @@ sub extendedStats {
         $sizes = $self->getSize($sizes);
 
         # SECTION + RELEASE
-        my $result = $section." ".$pre." ".$pretime;
+        $result = $section." ".$pre." ".$pretime;
 
         # FILES + SIZE?
         if ($file > 0 or $sizes > 0.00) {
@@ -1501,7 +1527,7 @@ sub searchHelp {
 # IRC functions
 ##
 
-# Send IRC message
+# Send IRC message, formatted for pre bot (surrounded by brackets).
 # Param (nick, message)
 sub sendMessage {
     my $self = shift;
@@ -1511,7 +1537,26 @@ sub sendMessage {
     $message = GREY."< ".NORMAL.$message.GREY." >".NORMAL;
 
     # send private message
-    $self->PutIRC("PRIVMSG ".$nick." : ".$message);
+    $self->sendRawMessage($nick, $message);
+}
+
+
+# Send RAW Message
+# Param (nick, message)
+sub sendRawMessage {
+      my $self = shift;
+      my ($nick, $message) = @_;
+      # send private message
+      $self->PutIRC("PRIVMSG ".$nick." : ".$message);
+}
+
+# Joins an array of collumns and creates a string which can be used in queries
+# Params: (arrayofcollumns)
+# Return: String
+sub joinCollumns {
+  my @collumns = @_;
+  my $joined = '`'.join('`,`', @collumns).'`';
+  return $joined;
 }
 
 # Load Config Ini file and set variables we need
@@ -1549,6 +1594,22 @@ sub loadConfig {
     %STATUS_TYPES = $cfg->val( 'settings', 'STATUS_TYPES' );
   }
   print "[PREBot] Loaded Config from ".$absolute_filepath."\n";
+}
+
+# Get a database connection
+sub getDBI {
+  my $dbi = DBI->connect("DBI:mysql:database=$DB_NAME;host=$DB_HOST", $DB_USER, $DB_PASSWD) or die "Couldn't connect to database: " . DBI->errstr;
+  return $dbi;
+}
+
+
+# Joins an array of collumns and creates a string which can be used in queries
+# Params: (arrayofcollumns)
+# Return: String
+sub joinCollumns {
+  my @collumns = @_;
+  my $joined = '`'.join('`,`', @collumns).'`';
+  return $joined;
 }
 
 1;
