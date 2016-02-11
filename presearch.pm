@@ -53,7 +53,7 @@ sub OnChanMsg {
       # !pre release
       if ($cmd eq "!pre" && @arguments) {
           # Search for pre
-          $self->searchPre($nick, $arguments[0]);
+          $self->searchPre($chan, $arguments[0]);
 
         # !dupe bla bla bla
       } elsif ($cmd eq "!dupe" && @arguments) {
@@ -144,7 +144,7 @@ sub searchPre {
     my $dbh = $self->getDBI();
 
     # Prepare Query -> Get Release
-    my $query = $dbh->prepare("SELECT ".joinCollumns(($COL_ID, $COL_PRETIME, $COL_RELEASE, $COL_SECTION, $COL_FILES, $COL_SIZE, $COL_STATUS, $COL_REASON, $COL_GROUP, $COL_NETWORK, $COL_MP3INFO, $COL_VIDEOINFO, $COL_URL))." FROM  `".$DB_TABLE."` WHERE `".$COL_RELEASE."` LIKE ? LIMIT 1;");
+    my $query = $dbh->prepare("SELECT ".joinCollumns(($COL_ID, $COL_PRETIME, $COL_RELEASE, $COL_SECTION, $COL_FILES, $COL_SIZE, $COL_STATUS, $COL_REASON, $COL_GROUP, $COL_NETWORK, $COL_MP3INFO, $COL_VIDEOINFO, $COL_URL, $COL_GENRE))." FROM  `".$DB_TABLE."` WHERE `".$COL_RELEASE."` LIKE ? LIMIT 1;");
     # Execute Query
     $query->execute($release) or die $dbh->errstr;
 
@@ -153,7 +153,7 @@ sub searchPre {
     # Do we have a result?
     if ($rows > 0) {
         # set variables
-        my ($id, $pretime, $pre, $section, $files, $size, $status, $reason, $group, $network, $mp3info, $videoinfo, $url) = $query->fetchrow();
+        my ($id, $pretime, $pre, $section, $files, $size, $status, $reason, $group, $network, $mp3info, $videoinfo, $url, $genre) = $query->fetchrow();
 
 
         $pretime = $self->get_time_since($pretime);
@@ -162,11 +162,11 @@ sub searchPre {
 
 
         # SECTION + RELEASE
-        my $preline = $section." ".$pre." ".$pretime;
+        my $preline = $section.GREY." ".$pre.$pretime;
 
         # FILES + SIZE?
         if ($files > 0 or $size > 0) {
-            $preline .= GREY." - [".NORMAL.$files.ORANGE."F".NORMAL." - ".$size.GREY."] ".NORMAL;
+            $preline .= " [".NORMAL.$files.ORANGE."F".NORMAL." - ".$size.GREY."] ".NORMAL;
         }
 
         # NUKED or DEL?
@@ -177,26 +177,45 @@ sub searchPre {
 
         $self->sendRawMessage($nick, $preline);
 
-        if($mp3info){
-          $self->sendRawMessage($nick, "[".GREY."MP3INFO".NORMAL."] [".ORANGE.$mp3info.NORMAL."]");
-        }
-        if($videoinfo){
-          $self->sendRawMessage($nick, "[MP3INFO] [".$mp3info."]");
+        my $howManyTrue = 0;
+        foreach my $var (($mp3info, $videoinfo, $url, $genre)){
+          if($var){
+            $howManyTrue += 1;
+          }
         }
 
-        if($url || $genre){
-          my $genreline;
+        my $infoline;
+        if($howManyTrue > 1){
+          if($mp3info){
+            $infoline .= GREY.BOLD."[".NORMAL.GREEN.$mp3info.GREY.BOLD."] ".NORMAL;
+          }
+          if($videoinfo){
+            $infoline .= GREY.BOLD."[".NORMAL.GREEN.$videoinfo.GREY.BOLD."] ".NORMAL;
+          }
           if($genre){
-            $genreline .= "[".$genre."]";
-          }else{
-            $genreline .= "[UNKNOWN_GENRE]";
+            $infoline .= GREY.BOLD."[".NORMAL.PURPLE.$genre.GREY.BOLD."] ".NORMAL;
           }
           if($url){
-            $genreline .= " URL: ".$url;
+            $infoline .= GREY.BOLD."[".NORMAL.TEAL.$url.GREY.BOLD."]";
           }
-          $self->sendRawMessage($nick, $genreline);
+        }elsif($howManyTrue > 0){
+          if($mp3info){
+            $infoline =  GREY.BOLD."[".BLUE."AUDIO".GREY.BOLD."] [".NORMAL.GREEN.$mp3info.GREY.BOLD."]";
+          }
+          if($videoinfo){
+            $infoline =  GREY.BOLD."[".BLUE."VIDEO".GREY.BOLD."] [".NORMAL.GREEN.$videoinfo.GREY.BOLD."]";
+          }
+          if($genre){
+            $infoline = GREY.BOLD."[".PURPLE."GENRE".GREY.BOLD."] [".NORMAL.PURPLE.$genre.GREY.BOLD."]";
+          }
+          if($url){
+            $infoline = NORMAL.GREY.BOLD."[".TEAL."URL".GREY.BOLD."] [".NORMAL.TEAL.$url.GREY.BOLD."]";
+          }
         }
 
+        if($infoline){
+          $self->sendRawMessage($nick, $infoline);
+        }
 
 
 
@@ -1442,7 +1461,7 @@ sub getSection  {
         $color = GREY;
     }
 
-    return GREY."[".BOLD.$color.$section.NORMAL.GREY."]".NORMAL;
+    return GREY.BOLD."[".$color.$section.NORMAL.GREY.BOLD."]".NORMAL;
 }
 
 # Return time passed since a timestamp
@@ -1534,7 +1553,7 @@ sub sendMessage {
     my ($nick, $message) = @_;
 
     # Brackets before and after the message
-    $message = GREY."< ".NORMAL.$message.GREY." >".NORMAL;
+    $message = " ".GREY."< ".NORMAL.$message.GREY." >".NORMAL;
 
     # send private message
     $self->sendRawMessage($nick, $message);
@@ -1547,7 +1566,7 @@ sub sendRawMessage {
       my $self = shift;
       my ($nick, $message) = @_;
       # send private message
-      $self->PutIRC("PRIVMSG ".$nick." : ".$message);
+      $self->PutIRC("PRIVMSG ".$nick." :".$message);
 }
 
 # Joins an array of collumns and creates a string which can be used in queries
