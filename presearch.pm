@@ -162,7 +162,7 @@ sub searchPre {
 
 
         # SECTION + RELEASE
-        my $preline = $section.GREY." ".$pre.$pretime;
+        my $preline = $section.GREY." ".$pre." ".$pretime;
 
         # FILES + SIZE?
         if ($files > 0 or $size > 0) {
@@ -186,30 +186,31 @@ sub searchPre {
 
         my $infoline;
         if($howManyTrue > 1){
+          if($genre){
+            $infoline .= GREY.BOLD."[".NORMAL.PURPLE.$genre.GREY.BOLD."] ".NORMAL;
+          }
           if($mp3info){
             $infoline .= GREY.BOLD."[".NORMAL.GREEN.$mp3info.GREY.BOLD."] ".NORMAL;
           }
           if($videoinfo){
             $infoline .= GREY.BOLD."[".NORMAL.GREEN.$videoinfo.GREY.BOLD."] ".NORMAL;
           }
-          if($genre){
-            $infoline .= GREY.BOLD."[".NORMAL.PURPLE.$genre.GREY.BOLD."] ".NORMAL;
-          }
+
           if($url){
             $infoline .= GREY.BOLD."[".NORMAL.TEAL.$url.GREY.BOLD."]";
           }
         }elsif($howManyTrue > 0){
+          if($genre){
+            $infoline = GREY.BOLD."[".PURPLE."GENRE".GREY."] [".NORMAL.PURPLE.$genre.GREY.BOLD."]";
+          }
           if($mp3info){
-            $infoline =  GREY.BOLD."[".BLUE."AUDIO".GREY.BOLD."] [".NORMAL.GREEN.$mp3info.GREY.BOLD."]";
+            $infoline =  GREY.BOLD."[".BLUE."AUDIO".GREY."] [".NORMAL.GREEN.$mp3info.GREY.BOLD."]";
           }
           if($videoinfo){
-            $infoline =  GREY.BOLD."[".BLUE."VIDEO".GREY.BOLD."] [".NORMAL.GREEN.$videoinfo.GREY.BOLD."]";
-          }
-          if($genre){
-            $infoline = GREY.BOLD."[".PURPLE."GENRE".GREY.BOLD."] [".NORMAL.PURPLE.$genre.GREY.BOLD."]";
+            $infoline =  GREY.BOLD."[".BLUE."VIDEO".GREY."] [".NORMAL.GREEN.$videoinfo.GREY.BOLD."]";
           }
           if($url){
-            $infoline = NORMAL.GREY.BOLD."[".TEAL."URL".GREY.BOLD."] [".NORMAL.TEAL.$url.GREY.BOLD."]";
+            $infoline = GREY.BOLD."[".TEAL."URL".GREY."] [".NORMAL.TEAL.$url.GREY.BOLD."]";
           }
         }
 
